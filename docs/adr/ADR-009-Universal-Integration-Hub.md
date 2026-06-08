@@ -2,7 +2,7 @@
 
 *   **Status**: Aprovada (Accepted)
 *   **Data**: 2026-06-08
-*   **Autor**: Antigravity (Advanced Agentic Coding)
+*   **Autor**: Equipe de Arquitetura QualitiOS
 
 ---
 

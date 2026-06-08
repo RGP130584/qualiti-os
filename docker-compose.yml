@@ -17,15 +17,16 @@ services:
     container_name: qualitaos-app
     restart: always
     environment:
-      - PORT=${QUALITI_PORT:-3001}
+      - PORT=3001
       - DATABASE_URL=${DATABASE_URL:-postgres://qualita:qualita_secure_pw@shared-postgres:5432/qualitaos}
       - JWT_SECRET=${JWT_SECRET:-super_secret_qualita_jwt_key_2026_secure}
       - AI_API_KEY=${AI_API_KEY:-mock_key_for_simulation}
       - AI_PROVIDER=${AI_PROVIDER:-mock}
-      - OLLAMA_URL=${OLLAMA_URL:-http://shared-ollama:11434}
+      - ALLOWED_ORIGINS=http://localhost,http://localhost:3000,http://localhost:3002
     ports:
       - "${QUALITI_FRONTEND_PORT:-3002}:3000"
-      - "${QUALITI_PORT:-3001}:3001"
+      - "${QUALITI_PORT:-3101}:3001"
+
     networks:
       - shared_net
     cap_drop:
@@ -33,7 +34,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${QUALITI_PORT:-3001}/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/api/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3

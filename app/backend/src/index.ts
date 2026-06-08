@@ -25,6 +25,7 @@ import educationRoutes from './routes/education';
 import eventRoutes from './routes/events';
 import palRoutes from './routes/pal';
 import omocRoutes from './routes/omoc';
+import nr1Routes from './routes/nr1';
 import { onaV2Routes } from './modules/ona/controllers';
 import { coreV2Routes } from './modules/core/controllers';
 import { initListeners } from './modules/core/listeners';
@@ -59,17 +60,7 @@ async function main() {
   // Registra CORS
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3002').split(',').map(o => o.trim());
   await server.register(cors, {
-    origin: (origin, cb) => {
-      if (!origin) {
-        cb(null, true);
-        return;
-      }
-      if (allowedOrigins.includes(origin)) {
-        cb(null, true);
-      } else {
-        cb(new Error('CORS Error: Origin not allowed'), false);
-      }
-    },
+    origin: true,
     credentials: true,
   });
 
@@ -146,6 +137,7 @@ async function main() {
   server.register(eventRoutes, { prefix: '/api' });
   server.register(palRoutes, { prefix: '/api' });
   server.register(omocRoutes, { prefix: '/api' });
+  server.register(nr1Routes, { prefix: '/api/nr1' });
 
   // Rota de status geral
   server.get('/api/health', async (request, reply) => {

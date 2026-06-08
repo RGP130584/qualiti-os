@@ -3,6 +3,7 @@ import { omocService } from '../modules/omoc/services';
 import { tenantLicenseManager } from '../utils/feature-guard';
 import { eventBus } from '../utils/event-bus';
 import '../modules/core/listeners';
+import { Nr1Service } from '../modules/nr1/services';
 
 // Utilitário simples para asserções
 function assert(condition: boolean, message: string) {
@@ -25,6 +26,10 @@ async function cleanupTenant(tenantId: string) {
     await client.query('DELETE FROM pops WHERE tenant_id = $1', [tenantId]);
     await client.query('DELETE FROM bpm_execucoes WHERE tenant_id = $1', [tenantId]);
     await client.query('DELETE FROM ona_planos_acao WHERE tenant_id = $1', [tenantId]);
+    await client.query('DELETE FROM nr1_evidencias WHERE tenant_id = $1', [tenantId]);
+    await client.query('DELETE FROM nr1_planos_acao WHERE tenant_id = $1', [tenantId]);
+    await client.query('DELETE FROM nr1_avaliacoes WHERE tenant_id = $1', [tenantId]);
+    await client.query('DELETE FROM nr1_riscos WHERE tenant_id = $1', [tenantId]);
     await client.query('DELETE FROM education_progress WHERE usuario_email LIKE $1', [`%${tenantId}%`]);
     await client.query('DELETE FROM education_notifications WHERE usuario_email LIKE $1', [`%${tenantId}%`]);
     await client.query('DELETE FROM usuarios WHERE unidade = $1', [tenantId]);
@@ -59,7 +64,8 @@ async function runTests() {
     { name: '4. Matrícula Automática no LMS na Contratação', fn: testLmsAutoEnrollment },
     { name: '5. Caching & Circuit Breaker de Feature Flags', fn: testFeatureGuardAndCache },
     { name: '6. Bloqueio Rígido de Cota de Documentos (100%)', fn: testDocumentQuotaBlock },
-    { name: '7. Suspensão Automática por Faturas Vencidas (D+5)', fn: testInvoiceAutoSuspension }
+    { name: '7. Suspensão Automática por Faturas Vencidas (D+5)', fn: testInvoiceAutoSuspension },
+    { name: '8. MVP NR1 - Criação e Matriz de Riscos 5x5', fn: testNr1MVP }
   ];
 
   for (const tc of testCases) {
@@ -478,6 +484,61 @@ async function testInvoiceAutoSuspension() {
 
   } finally {
     await client.query("DELETE FROM pal_planos WHERE nome = 'Plano Cobrança'");
+    client.release();
+    await cleanupTenant(tenantId);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// CASO DE TESTE 8: MVP NR1 - Criação e Matriz de Riscos 5x5
+// -----------------------------------------------------------------------------
+async function testNr1MVP() {
+  const tenantId = 'TEST_TENANT_NR1';
+  await cleanupTenant(tenantId);
+  const client = await pool.connect();
+  const nr1Service = new Nr1Service(pool);
+  try {
+    // 1. Criar Cargo OMOC
+    const cargoRes = await client.query(`
+      INSERT INTO omoc_cargos (tenant_id, nome, setor, limite_vagas) 
+      VALUES ($1, 'Gestor de Riscos', 'Qualidade', 1) RETURNING id
+    `, [tenantId]);
+    const cargoId = cargoRes.rows[0].id;
+
+    // 2. Criar um risco via Service
+    const risco = await nr1Service.createRisco(tenantId, {
+      titulo: 'Risco de Teste',
+      descricao: 'Descrição do risco de teste',
+      categoria: 'Assistencial',
+      setor: 'Geral',
+      omoc_cargo_id: cargoId,
+      status: 'Ativo'
+    });
+
+    assert(risco.id !== undefined, 'Risco deve ter sido criado e possuir um ID');
+    assert(risco.codigo.startsWith('RSK-'), 'Código do risco deve iniciar com RSK-');
+
+    // 3. Avaliar o Risco (Matriz 5x5)
+    // Probabilidade 4 x Impacto 5 = Nível 20
+    const avaliacao = await nr1Service.evaluateRisco(tenantId, risco.id!, 4, 5, 'Risco muito grave');
+    
+    assert(avaliacao.nivel_risco === 20, 'O nível de risco deve ser exatamente 20 (4x5)');
+
+    // 4. Criar Plano de Ação
+    // Simula a criação via BPM
+    const plano = await nr1Service.createPlanoAcao(tenantId, risco.id!, 'Plano Teste', cargoId);
+    
+    assert(plano.id !== undefined, 'Plano de ação deve ter sido criado');
+    assert(plano.status === 'Pendente', 'Status inicial do plano de ação deve ser Pendente');
+
+    // 5. Testar o Agregador do Dashboard
+    const dashboard = await nr1Service.getDashboard(tenantId);
+    
+    assert(dashboard.riscosPorStatus.length > 0, 'Dashboard deve conter contagem de riscos por status');
+    assert(dashboard.matriz.length > 0, 'Dashboard deve conter agrupamento na matriz');
+    assert(dashboard.matriz[0].probabilidade === 4 && dashboard.matriz[0].impacto === 5, 'A matriz deve refletir a avaliação 4x5');
+    
+  } finally {
     client.release();
     await cleanupTenant(tenantId);
   }

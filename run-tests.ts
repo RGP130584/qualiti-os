@@ -33,12 +33,12 @@ try {
   // If DATABASE_URL points to shared-postgres, map it to 127.0.0.1 ONLY if we are NOT running inside docker
   if (env.DATABASE_URL && env.DATABASE_URL.includes('@shared-postgres:')) {
     if (!isDocker) {
-      env.DATABASE_URL = env.DATABASE_URL.replace('@shared-postgres:', '@127.0.0.1:');
+      env.DATABASE_URL = env.DATABASE_URL.replace('@shared-postgres:5432', '@127.0.0.1:55434');
     }
   } else if (!env.DATABASE_URL) {
     env.DATABASE_URL = isDocker 
       ? 'postgres://qualita:qualita_secure_pw@shared-postgres:5432/qualitaos'
-      : 'postgres://qualita:qualita_secure_pw@127.0.0.1:5432/qualitaos';
+      : 'postgres://qualita:qualita_secure_pw@127.0.0.1:55434/qualitaos';
   }
 
   execSync('npx tsx src/tests/run-tests.ts', {

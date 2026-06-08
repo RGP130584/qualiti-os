@@ -745,6 +745,58 @@ export async function initDb() {
       ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
     `);
 
+    // ==========================================
+    // TABELAS DO MÓDULO NR1 (GESTÃO DE RISCOS)
+    // ==========================================
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS nr1_riscos (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        codigo VARCHAR(50) UNIQUE NOT NULL,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        categoria VARCHAR(100) NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        omoc_cargo_id INTEGER REFERENCES omoc_cargos(id) ON DELETE SET NULL,
+        status VARCHAR(50) DEFAULT 'Ativo',
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS nr1_avaliacoes (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        risco_id INTEGER REFERENCES nr1_riscos(id) ON DELETE CASCADE,
+        data_avaliacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        probabilidade INTEGER NOT NULL CHECK (probabilidade >= 1 AND probabilidade <= 5),
+        impacto INTEGER NOT NULL CHECK (impacto >= 1 AND impacto <= 5),
+        nivel_risco INTEGER NOT NULL,
+        justificativa TEXT,
+        avaliador_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS nr1_planos_acao (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        risco_id INTEGER REFERENCES nr1_riscos(id) ON DELETE CASCADE,
+        bpm_execucao_id INTEGER REFERENCES bpm_execucoes(id) ON DELETE SET NULL,
+        titulo VARCHAR(255) NOT NULL,
+        responsavel_omoc_id INTEGER REFERENCES omoc_cargos(id) ON DELETE SET NULL,
+        prazo TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'Pendente',
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS nr1_evidencias (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        risco_id INTEGER REFERENCES nr1_riscos(id) ON DELETE CASCADE,
+        ecm_pop_id INTEGER REFERENCES pops(id) ON DELETE SET NULL,
+        descricao TEXT,
+        url_anexo TEXT,
+        data_anexo TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // =========================================================================
     // MIGRAÇÃO DE DADOS DE TABELAS LEGADAS
     // =========================================================================
@@ -1187,7 +1239,7 @@ export async function initDb() {
     const checkUsers = await client.query('SELECT COUNT(*) FROM usuarios');
     if (parseInt(checkUsers.rows[0].count) === 0) {
       console.log('Realizando seed inicial de Usuários (RBAC / Acesso)...');
-      const hashedPassword = hashPassword('admin123');
+      const hashedPassword = hashPassword('123admin');
       await client.query(`
         INSERT INTO usuarios (nome, email, senha_hash, rbac_role, departamento, unidade)
         VALUES 
@@ -1461,6 +1513,66 @@ export async function initDb() {
           INSERT INTO omoc_ocupacoes (tenant_id, usuario_id, cargo_id)
           VALUES ('Unidade Central', $1, $2);
         `, [userAna.rows[0].id, coordId]);
+      }
+    }
+
+    // ==========================================
+    // SEED DE DADOS INICIAIS DO MÓDULO NR1
+    // ==========================================
+    const checkNr1 = await client.query('SELECT COUNT(*) FROM nr1_riscos');
+    if (parseInt(checkNr1.rows[0].count) === 0) {
+      console.log('Realizando seed inicial do Módulo NR1...');
+
+      // Buscar IDs do OMOC para associar ao risco
+      const cargoDir = await client.query("SELECT id FROM omoc_cargos WHERE nome = 'Diretor Geral' LIMIT 1");
+      const cargoEnf = await client.query("SELECT id FROM omoc_cargos WHERE nome = 'Enfermeiro Assistencial' LIMIT 1");
+
+      const dirId = cargoDir.rows.length > 0 ? cargoDir.rows[0].id : null;
+      const enfId = cargoEnf.rows.length > 0 ? cargoEnf.rows[0].id : null;
+
+      const userAdmin = await client.query("SELECT id FROM usuarios WHERE email = 'admin@qualitaos.com'");
+      const adminId = userAdmin.rows.length > 0 ? userAdmin.rows[0].id : null;
+
+      // Inserir Riscos
+      const resRisco = await client.query(`
+        INSERT INTO nr1_riscos (tenant_id, codigo, titulo, descricao, categoria, setor, omoc_cargo_id, status)
+        VALUES 
+        ('Unidade Central', 'RSK-001', 'Risco de Infecção Hospitalar (IRAS)', 'Risco de contaminação cruzada na UTI devido a falha na adesão à higienização das mãos.', 'Assistencial', 'Enfermagem', $1, 'Ativo'),
+        ('Unidade Central', 'RSK-002', 'Falha na Identificação do Paciente', 'Risco de procedimentos incorretos devido a falha na pulseira de identificação.', 'Assistencial', 'Geral', $2, 'Ativo'),
+        ('Unidade Central', 'RSK-003', 'Glosa Médica Elevada', 'Risco financeiro devido a falhas no preenchimento do prontuário eletrônico.', 'Financeiro', 'Administrativo', $1, 'Mitigado')
+        RETURNING id;
+      `, [enfId, dirId]);
+
+      if (resRisco.rows.length > 0) {
+        const risco1Id = resRisco.rows[0].id;
+        const risco2Id = resRisco.rows[1].id;
+        const risco3Id = resRisco.rows[2].id;
+
+        // Inserir Avaliações
+        await client.query(`
+          INSERT INTO nr1_avaliacoes (tenant_id, risco_id, probabilidade, impacto, nivel_risco, justificativa, avaliador_id)
+          VALUES 
+          ('Unidade Central', $1, 4, 5, 20, 'Alta incidência observada no último mês.', $4),
+          ('Unidade Central', $2, 2, 4, 8, 'Protocolos atuais reduzem a probabilidade, mas o impacto é alto.', $4),
+          ('Unidade Central', $3, 3, 3, 9, 'Impacto financeiro moderado, ocorrência sazonal.', $4)
+        `, [risco1Id, risco2Id, risco3Id, adminId]);
+
+        // Inserir Planos de Ação (Mock BPM)
+        await client.query(`
+          INSERT INTO nr1_planos_acao (tenant_id, risco_id, titulo, responsavel_omoc_id, prazo, status)
+          VALUES 
+          ('Unidade Central', $1, 'Campanha de Higienização das Mãos', $2, NOW() + INTERVAL '30 days', 'Em Andamento'),
+          ('Unidade Central', $2, 'Treinamento de Dupla Checagem', $2, NOW() + INTERVAL '15 days', 'Pendente')
+        `, [risco1Id, enfId]);
+
+        // Inserir Evidências (Mock ECM)
+        const popCheck = await client.query("SELECT id FROM pops WHERE codigo = 'POP-GER-001' LIMIT 1");
+        if (popCheck.rows.length > 0) {
+          await client.query(`
+            INSERT INTO nr1_evidencias (tenant_id, risco_id, ecm_pop_id, descricao)
+            VALUES ('Unidade Central', $1, $2, 'POP vinculado para mitigação do risco.');
+          `, [risco1Id, popCheck.rows[0].id]);
+        }
       }
     }
 

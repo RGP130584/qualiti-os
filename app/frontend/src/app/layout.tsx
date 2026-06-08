@@ -37,12 +37,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     educacao: false,
     auditoria: false,
     ia: false,
+    nr1: false,
   });
 
   const isAuthPage = pathname === '/login' || pathname === '/wizard';
 
   const getAccordionKeyForPath = (path: string) => {
-    if (path === '/' || path === '/users' || path.startsWith('/admin')) return 'governanca';
+    if (path === '/' || path === '/users' || (path.startsWith('/admin') && !path.startsWith('/admin/nr1'))) return 'governanca';
+    if (path.startsWith('/admin/nr1')) return 'nr1';
     if (path === '/okrs' || path.startsWith('/indicators')) return 'estrategia';
     if (path.startsWith('/ona')) return 'compliance';
     if (path === '/pops' || path === '/bpm') return 'documentos';
@@ -199,12 +201,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     },
     {
       key: 'riscos',
-      name: 'Riscos & Segurança',
+      name: 'Riscos, Incidentes & Segurança',
       icon: AlertTriangle,
       items: [
         { name: 'Ocorrências & IA', path: '/incidents', icon: Zap, requiredFeature: 'feature:riscos:core' },
         { name: 'Gestão CAPA', path: '/incidents?tab=capa', icon: AlertTriangle, requiredFeature: 'feature:riscos:core' },
         { name: 'Segurança do Paciente', path: '/incidents?tab=seguranca', icon: Shield, requiredFeature: 'feature:riscos:core' },
+      ]
+    },
+    {
+      key: 'nr1',
+      name: 'NR1 Intelligence',
+      icon: ShieldCheck,
+      items: [
+        { name: 'Dashboard NR1', path: '/admin/nr1', icon: Activity },
+        { name: 'Inventário de Riscos', path: '/admin/nr1/riscos', icon: AlertTriangle },
       ]
     },
     {
