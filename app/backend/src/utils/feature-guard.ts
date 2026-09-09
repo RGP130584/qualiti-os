@@ -75,7 +75,9 @@ class TenantLicenseManager {
         'indicators': 'feature:okr:core',
         'incidents': 'feature:riscos:core',
         'ai': 'feature:ai:ishikawa',
-        'fhir': 'feature:fhir:core'
+        'fhir': 'feature:fhir:core',
+        'lms': 'feature:lms:core',
+        'education': 'feature:lms:core'
       };
 
       for (const row of trialsRes.rows) {

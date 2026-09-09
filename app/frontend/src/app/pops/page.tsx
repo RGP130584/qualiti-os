@@ -103,7 +103,7 @@ export default function PopsPage() {
     }
   }
 
-  // Sincronização Rede Verse
+  // Sincronização de documentos
   async function handleIngestVerse() {
     setIngesting(true);
     try {
@@ -113,7 +113,7 @@ export default function PopsPage() {
         alert(data.message);
         await fetchAllData();
       } else {
-        alert(data.error || 'Erro ao sincronizar workspace Rede Verse');
+        alert(data.error || 'Erro ao sincronizar documentos');
       }
     } catch (err) {
       alert('Erro de conexão ao sincronizar workspace');
@@ -471,7 +471,7 @@ export default function PopsPage() {
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <button onClick={handleIngestVerse} disabled={ingesting} className="btn btn-primary" style={{ backgroundColor: '#38bdf8', color: '#0f172a', fontWeight: 700, border: 'none', padding: '0.8rem 1.5rem', borderRadius: '10px', boxShadow: '0 4px 12px rgba(56, 189, 248, 0.3)' }}>
               {ingesting ? <RefreshCw className="spin" size={18} /> : <FileCheck size={18} />} 
-              {ingesting ? 'Sincronizando...' : 'Sincronizar 69 POPs da Rede Verse'}
+              {ingesting ? 'Sincronizando...' : 'Sincronizar os documentos'}
             </button>
             <button onClick={startCreate} className="btn btn-primary" style={{ backgroundColor: '#10b981', color: 'white', fontWeight: 700, border: 'none', padding: '0.8rem 1.5rem', borderRadius: '10px', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
               <Plus size={18} /> Criar Documento
